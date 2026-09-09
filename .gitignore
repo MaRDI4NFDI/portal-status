@@ -1,0 +1,19 @@
+# Never commit credentials
+.env
+*.env
+!.env.example
+*token*
+*secret*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.bak
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

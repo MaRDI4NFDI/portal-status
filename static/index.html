@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaRDI Portal Status</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161e;
+    --surface2: #1a1e28;
+    --border: #232838;
+    --accent: #4af0a0;
+    --accent2: #3bb8f5;
+    --warn: #f5c842;
+    --error: #f55c5c;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    padding: 48px 0 32px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .logo-area {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-mark {
+    width: 42px;
+    height: 42px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: #0d0f14;
+    flex-shrink: 0;
+  }
+
+  .logo-text h1 {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+
+  .logo-text p {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-weight: 300;
+  }
+
+  .overall-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 18px;
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2.5s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  .status-dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .status-dot.error { background: var(--error); box-shadow: 0 0 8px var(--error); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .overall-status span {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .last-updated {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  /* Notice banner */
+  .notice[hidden] { display: none; }
+  .notice {
+    margin: 24px 0 0;
+    background: rgba(74, 240, 160, 0.07);
+    border: 1px solid rgba(74, 240, 160, 0.2);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .notice::before {
+    content: '⚠';
+    color: var(--warn);
+    font-size: 13px;
+  }
+
+  /* Section */
+  section {
+    padding: 36px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  /* Metric cards grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .metric-card:hover {
+    border-color: rgba(74, 240, 160, 0.3);
+  }
+
+  .metric-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .metric-card:hover::after { opacity: 1; }
+
+  .metric-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .metric-label .src {
+    font-family: var(--mono);
+    font-size: 9px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .metric-value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .metric-value.loading {
+    color: var(--border);
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  .metric-sub {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .metric-sub .up { color: var(--accent); }
+  .metric-sub .down { color: var(--error); }
+
+  /* Sparkline */
+  .sparkline {
+    margin-top: 14px;
+    height: 36px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .spark-bar {
+    flex: 1;
+    background: var(--border);
+    border-radius: 2px;
+    transition: background 0.2s;
+  }
+
+  .metric-card:hover .spark-bar {
+    background: rgba(74, 240, 160, 0.2);
+  }
+
+  .spark-bar.accent { background: rgba(74, 240, 160, 0.5); }
+
+  /* Component status table */
+  .component-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .component-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: border-color 0.2s;
+  }
+
+  .component-row:hover { border-color: var(--border); }
+
+  .component-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .component-icon {
+    font-size: 15px;
+    width: 28px;
+    text-align: center;
+  }
+
+  .component-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+
+  .component-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .badge-ok {
+    background: rgba(74, 240, 160, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(74, 240, 160, 0.25);
+  }
+
+  .badge-warn {
+    background: rgba(245, 200, 66, 0.12);
+    color: var(--warn);
+    border: 1px solid rgba(245, 200, 66, 0.25);
+  }
+
+  .badge-error {
+    background: rgba(245, 92, 92, 0.12);
+    color: var(--error);
+    border: 1px solid rgba(245, 92, 92, 0.25);
+  }
+
+  .badge-pending {
+    background: rgba(107,114,128, 0.12);
+    color: var(--muted);
+    border: 1px solid rgba(107,114,128, 0.25);
+  }
+
+  /* Response time bar */
+  .latency-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    max-width: 180px;
+  }
+
+  .latency-bar-bg {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .latency-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width 1s ease;
+  }
+
+  .latency-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    min-width: 52px;
+    text-align: right;
+  }
+
+  /* Incident history */
+  .incident-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .incident-day {
+    display: flex;
+    gap: 20px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .incident-day:last-child { border-bottom: none; }
+
+  .incident-date {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 80px;
+    padding-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .incident-content {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .incident-item {
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .incident-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-right: 6px;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+  }
+
+  .tag-resolved { background: rgba(74,240,160,0.12); color: var(--accent); }
+  .tag-degraded { background: rgba(245,200,66,0.12); color: var(--warn); }
+  .tag-outage { background: rgba(245,92,92,0.12); color: var(--error); }
+
+  /* Footer */
+  footer {
+    padding: 32px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  footer p {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  footer a {
+    color: var(--accent2);
+    text-decoration: none;
+  }
+
+  .data-sources {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .ds-pill {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .ds-pill.live {
+    border-color: rgba(74,240,160,0.25);
+    color: var(--accent);
+  }
+
+  .ds-pill.mock {
+    border-color: rgba(245,200,66,0.25);
+    color: var(--warn);
+  }
+
+  /* Tabs */
+  .tab-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+  }
+
+  .tab {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 5px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .tab.active {
+    background: var(--surface2);
+    border-color: rgba(74,240,160,0.3);
+    color: var(--accent);
+  }
+
+  .tab:hover:not(.active) { border-color: var(--muted); color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-inner">
+      <div class="logo-area">
+        <div class="logo-mark">M∂</div>
+        <div class="logo-text">
+          <h1>MaRDI Portal Status</h1>
+          <p>Mathematical Research Data Initiative · portal.mardi4nfdi.de</p>
+        </div>
+      </div>
+      <div>
+        <div class="overall-status">
+          <div class="status-dot"></div>
+          <div>
+            <span>ALL SYSTEMS OPERATIONAL</span>
+            <div class="last-updated" id="last-updated">Refreshing...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notice" id="notice" hidden></div>
+  </header>
+
+  <!-- LIVE METRICS -->
+  <section>
+    <div class="section-label">/ Live Metrics</div>
+
+    <div class="tab-row">
+      <button class="tab active" onclick="setWindow('day', this)">24h</button>
+      <button class="tab" onclick="setWindow('week', this)">7d</button>
+      <button class="tab" onclick="setWindow('month', this)">30d</button>
+    </div>
+
+    <div class="metrics-grid">
+
+      <div class="metric-card">
+        <div class="metric-label">
+          Total Request Volume
+          <span class="src">TRAEFIK</span>
+        </div>
+        <div class="metric-value loading" id="req-volume">—</div>
+        <div class="metric-sub" id="req-sub">Loading…</div>
+        <div class="sparkline" id="spark-req"></div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">
+          Wiki Response Time
+          <span class="src">PROMETHEUS</span>
+        </div>
+        <div class="metric-value loading" id="resp-time">—</div>
+        <div class="metric-sub" id="resp-sub">Loading…</div>
+        <div class="sparkline" id="spark-resp"></div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">
+          Error Responses (5xx)
+          <span class="src">TRAEFIK</span>
+        </div>
+        <div class="metric-value loading" id="error-count">—</div>
+        <div class="metric-sub" id="error-sub">Loading…</div>
+        <div class="sparkline" id="spark-err"></div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">
+          Items Modified
+          <span class="src">SPARQL · LIVE</span>
+        </div>
+        <div class="metric-value loading" id="edit-count">—</div>
+        <div class="metric-sub" id="edit-sub">Fetching from SPARQL endpoint…</div>
+        <div class="sparkline" id="spark-edit"></div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">
+          Blocked Requests
+          <span class="src">CROWDSEC</span>
+        </div>
+        <div class="metric-value loading" id="blocked-count">—</div>
+        <div class="metric-sub" id="blocked-sub">Loading…</div>
+        <div class="sparkline" id="spark-conn"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- COMPONENT STATUS -->
+  <section>
+    <div class="section-label">/ Component Status</div>
+    <div class="component-list">
+
+      <div class="component-row">
+        <div>
+          <div class="component-name"><span class="component-icon">📖</span>Portal Reading (Wiki Pages)</div>
+          <div class="component-desc">portal.mardi4nfdi.de — MediaWiki page serving</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="latency-bar-wrap">
+            <div class="latency-bar-bg"><div class="latency-bar-fill" style="width:14%"></div></div>
+            <div class="latency-val">142ms</div>
+          </div>
+          <span class="component-badge badge-ok">OPERATIONAL</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <div>
+          <div class="component-name"><span class="component-icon">✏️</span>Portal Editing (Wikibase)</div>
+          <div class="component-desc">Item creation, editing, and QuickStatements</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="latency-bar-wrap">
+            <div class="latency-bar-bg"><div class="latency-bar-fill" style="width:22%"></div></div>
+            <div class="latency-val">218ms</div>
+          </div>
+          <span class="component-badge badge-ok">OPERATIONAL</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <div>
+          <div class="component-name"><span class="component-icon">🔍</span>SPARQL Query Service</div>
+          <div class="component-desc">query.portal.mardi4nfdi.de — 838,821,505 triples · Live ping</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="latency-bar-wrap">
+            <div class="latency-bar-bg"><div class="latency-bar-fill" id="sparql-bar" style="width:0%;"></div></div>
+            <div class="latency-val" id="sparql-latency">…</div>
+          </div>
+          <span class="component-badge" id="sparql-badge">CHECKING</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <div>
+          <div class="component-name"><span class="component-icon">🔎</span>Full-Text Search (ElasticSearch)</div>
+          <div class="component-desc">CirrusSearch extension — wiki full-text search</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="latency-bar-wrap">
+            <div class="latency-bar-bg"><div class="latency-bar-fill" style="width:9%"></div></div>
+            <div class="latency-val">89ms</div>
+          </div>
+          <span class="component-badge badge-ok">OPERATIONAL</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <div>
+          <div class="component-name"><span class="component-icon">📦</span>MediaWiki API</div>
+          <div class="component-desc">portal.mardi4nfdi.de/w/api.php</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="latency-bar-wrap">
+            <div class="latency-bar-bg"><div class="latency-bar-fill" style="width:11%"></div></div>
+            <div class="latency-val">108ms</div>
+          </div>
+          <span class="component-badge badge-ok">OPERATIONAL</span>
+        </div>
+      </div>
+
+      <div class="component-row">
+        <div>
+          <div class="component-name"><span class="component-icon">💾</span>Database (MariaDB)</div>
+          <div class="component-desc">Primary wiki database — ZIB infrastructure</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div class="latency-bar-wrap">
+            <div class="latency-bar-bg"><div class="latency-bar-fill" style="width:4%"></div></div>
+            <div class="latency-val">42ms</div>
+          </div>
+          <span class="component-badge badge-ok">OPERATIONAL</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- INCIDENT HISTORY -->
+  <section>
+    <div class="section-label">/ Past Incidents</div>
+    <div class="incident-list">
+
+      <div class="incident-day">
+        <div class="incident-date">May 07, 2026</div>
+        <div class="incident-content">No incidents reported.</div>
+      </div>
+
+      <div class="incident-day">
+        <div class="incident-date">May 06, 2026</div>
+        <div class="incident-content">No incidents reported.</div>
+      </div>
+
+      <div class="incident-day">
+        <div class="incident-date">Apr 28, 2026</div>
+        <div class="incident-content">
+          <div class="incident-item">
+            <span class="incident-tag tag-resolved">RESOLVED</span>
+            SPARQL query endpoint elevated latency (14:02–15:47 UTC). Wikidata Query Service container restarted. No data loss.
+          </div>
+        </div>
+      </div>
+
+      <div class="incident-day">
+        <div class="incident-date">Apr 14, 2026</div>
+        <div class="incident-content">
+          <div class="incident-item">
+            <span class="incident-tag tag-resolved">RESOLVED</span>
+            Scheduled maintenance — k8s node upgrade on ZIB infrastructure. Portal in read-only mode 02:00–03:30 UTC.
+          </div>
+        </div>
+      </div>
+
+      <div class="incident-day">
+        <div class="incident-date">Mar 31, 2026</div>
+        <div class="incident-content">No incidents reported.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>
+      MaRDI Portal Status &mdash; <a href="https://portal.mardi4nfdi.de">portal.mardi4nfdi.de</a> &mdash;
+      Infrastructure at <a href="https://www.zib.de">ZIB Berlin</a>
+    </p>
+    <div class="data-sources">
+      <span class="ds-pill" id="pill-prom">PROMETHEUS</span>
+      <span class="ds-pill" id="pill-sparql">SPARQL</span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // All data comes from the status service, which queries Prometheus and
+  // SPARQL server-side. The browser never talks to Prometheus directly --
+  // it is not reachable outside the ZIB network.
+  const STATUS_URL = '/api/status.json';
+  const REFRESH_MS = 30000;
+
+  const $ = id => document.getElementById(id);
+  const fmtRate = v => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(1);
+  const unit = u => `<span style="font-size:14px;color:var(--muted)">${u}</span>`;
+
+  function setNotice(text, tone) {
+    const el = $('notice');
+    if (!text) { el.hidden = true; return; }
+    el.hidden = false;
+    el.textContent = text;
+    el.style.borderColor = tone === 'error'
+      ? 'rgba(245,92,92,.25)' : 'rgba(245,200,66,.25)';
+  }
+
+  function setPill(id, ok) {
+    const el = $(id);
+    el.className = 'ds-pill ' + (ok ? 'live' : 'mock');
+    el.textContent = el.textContent.split(' ·')[0] + (ok ? ' · LIVE' : ' · DOWN');
+  }
+
+  function metric(id, subId, value, sub) {
+    const el = $(id);
+    el.classList.remove('loading');
+    el.innerHTML = value;
+    if (subId) $(subId).innerHTML = sub;
+  }
+
+  // Latency thresholds, in seconds
+  function grade(sec) {
+    if (sec < 0.3)  return ['badge-ok',    'OPERATIONAL', 'var(--accent)'];
+    if (sec < 0.8)  return ['badge-warn',  'DEGRADED',    'var(--warn)'];
+    return            ['badge-error', 'SLOW',        'var(--error)'];
+  }
+
+  function renderPrometheus(p) {
+    setPill('pill-prom', !!p);
+    if (!p) {
+      ['req-volume','resp-time','error-count','blocked-count'].forEach(id => {
+        const el = $(id);
+        el.classList.remove('loading');
+        el.textContent = 'n/a';
+        el.style.color = 'var(--muted)';
+      });
+      ['req-sub','resp-sub','error-sub','blocked-sub'].forEach(id =>
+        $(id).innerHTML = '<span style="color:var(--error)">Metrics unavailable</span>');
+      return;
+    }
+
+    metric('req-volume', 'req-sub',
+      fmtRate(p.request_rate ?? 0) + unit('req/s'),
+      'Excludes blocked bot traffic');
+
+    const p50 = p.latency_p50, p95 = p.latency_p95, p99 = p.latency_p99;
+    metric('resp-time', 'resp-sub',
+      Math.round((p50 ?? 0) * 1000) + unit('ms'),
+      `p95: <span style="color:var(--text)">${Math.round((p95 ?? 0) * 1000)}ms</span>` +
+      ` &nbsp;|&nbsp; p99: <span style="color:var(--warn)">${(p99 ?? 0).toFixed(2)}s</span>`);
+
+    const err = p.error_rate_pct ?? 0;
+    metric('error-count', 'error-sub',
+      err.toFixed(3) + unit('%'),
+      err < 1 ? '<span class="up">Within normal range</span>'
+              : '<span style="color:var(--error)">Elevated</span>');
+
+    metric('blocked-count', 'blocked-sub',
+      fmtRate(p.blocked_rate ?? 0) + unit('req/s'),
+      'CrowdSec 403s, not counted above');
+  }
+
+  function renderSparql(s) {
+    setPill('pill-sparql', !!s);
+    const badge = $('sparql-badge'), lat = $('sparql-latency'), bar = $('sparql-bar');
+    const edits = $('edit-count'), sub = $('edit-sub');
+
+    if (!s) {
+      badge.className = 'component-badge badge-error';
+      badge.textContent = 'UNREACHABLE';
+      lat.textContent = '—';
+      bar.style.width = '100%';
+      bar.style.background = 'var(--error)';
+      edits.classList.remove('loading');
+      edits.textContent = 'n/a';
+      sub.innerHTML = '<span style="color:var(--error)">SPARQL unavailable</span>';
+      return;
+    }
+
+    const [cls, label, color] = grade(s.latency_ms / 1000);
+    badge.className = 'component-badge ' + cls;
+    badge.textContent = label;
+    lat.textContent = s.latency_ms + 'ms';
+    lat.style.color = color;
+    bar.style.width = Math.min(s.latency_ms / 10, 85) + '%';
+    bar.style.background = color;
+
+    edits.classList.remove('loading');
+    edits.textContent = s.recent_edits.toLocaleString();
+    sub.innerHTML = `Items modified in last ${s.edit_window_days} days`;
+  }
+
+  // Component rows keyed by the Traefik service name Prometheus reports
+  const COMPONENTS = { wikibase: 0, wdqs: 2 };
+
+  function renderComponents(p) {
+    if (!p || !p.service_error_rate) return;
+    const rows = document.querySelectorAll('.component-row');
+    Object.entries(COMPONENTS).forEach(([svc, idx]) => {
+      const row = rows[idx];
+      if (!row) return;
+      const badge = row.querySelector('.component-badge');
+      if (!badge || badge.id === 'sparql-badge') return;
+      const errRate = p.service_error_rate[svc] ?? 0;
+      const ok = errRate < 0.5;
+      badge.className = 'component-badge ' + (ok ? 'badge-ok' : 'badge-error');
+      badge.textContent = ok ? 'OPERATIONAL' : 'ERRORS';
+    });
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch(STATUS_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+
+      renderPrometheus(data.prometheus);
+      renderSparql(data.sparql);
+      renderComponents(data.prometheus);
+
+      const ts = new Date(data.generated_at);
+      $('last-updated').textContent = 'Updated ' +
+        ts.toUTCString().replace('GMT', 'UTC');
+
+      if (data.stale) {
+        setNotice('Showing last known values — refresh from the monitoring backend failed.', 'warn');
+      } else if (data.sources.prometheus !== 'ok' || data.sources.sparql !== 'ok') {
+        setNotice('Some metrics are unavailable. The portal itself may still be fine.', 'warn');
+      } else {
+        setNotice(null);
+      }
+    } catch (e) {
+      setNotice('Cannot reach the status service. It may be down along with the portal.', 'error');
+      $('last-updated').textContent = 'Update failed';
+    }
+  }
+
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+
+  // Time-window tabs are not wired to the backend yet -- the service exposes
+  // a single 5m window. Left in place for when range queries are added.
+  function setWindow(w, btn) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+  }
+</script>
+</body>
+</html>
