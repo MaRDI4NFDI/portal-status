@@ -112,6 +112,46 @@ def service_rate(extra_labels: str = "") -> str:
     )
 
 
+# ------------------------------------------------- what the API exposes
+#
+# Traefik reports every routed service -- around eighteen, including
+# ipfs-admin, wdqs-internal, mscbackend and other things that are not
+# user-facing. Returning all of them would publish a map of the internal
+# stack on a public endpoint, so only these are reported.
+#
+# To show another service publicly, add it here. Nothing else needs changing.
+PUBLIC_SERVICES = {
+    "wikibase": "Portal (wiki pages and editing)",
+    "wdqs": "SPARQL query service",
+    "ipfs": "IPFS file storage",
+}
+
+# ------------------------------------------------- traffic-light thresholds
+#
+# Deliberately conservative: a status page that cries wolf gets ignored, and
+# one that stays green through an outage is worse than none. Tune these
+# against observed behaviour rather than guesses -- SPARQL, for instance,
+# sits around 300ms normally, so its warn level allows for that.
+
+# p95 on this portal routinely sits above 1s and p99 above 3s, so the first
+# pass at 1.0/3.0 left the page permanently amber. These are set above the
+# normal operating band instead. Check the Grafana latency panel over a week
+# before changing them: a status page stuck on a warning gets ignored, and
+# then nobody notices the day it means something.
+LATENCY_WARN_S = float(os.getenv("LATENCY_WARN_S", "2.5"))
+LATENCY_CRIT_S = float(os.getenv("LATENCY_CRIT_S", "6.0"))
+
+ERROR_WARN_PCT = float(os.getenv("ERROR_WARN_PCT", "1.0"))
+ERROR_CRIT_PCT = float(os.getenv("ERROR_CRIT_PCT", "5.0"))
+
+# 5xx responses per second from one service
+SERVICE_ERROR_WARN = float(os.getenv("SERVICE_ERROR_WARN", "0.05"))
+SERVICE_ERROR_CRIT = float(os.getenv("SERVICE_ERROR_CRIT", "0.5"))
+
+SPARQL_WARN_MS = float(os.getenv("SPARQL_WARN_MS", "500"))
+SPARQL_CRIT_MS = float(os.getenv("SPARQL_CRIT_MS", "2000"))
+
+
 # 403s are CrowdSec bot blocks. They have run several times higher than all
 # real traffic, so counting them would make the public number track bot waves
 # rather than portal health. Reported separately instead.
@@ -290,10 +330,135 @@ def collect_metrics():
         data[key] = {
             labels["svc"]: value
             for labels, value in (results.get(key) or [])
-            if labels.get("svc")
+            if labels.get("svc") in PUBLIC_SERVICES
         }
 
     return data
+
+
+# ---------------------------------------------------------------- status
+
+GREEN, YELLOW, RED, UNKNOWN = "green", "yellow", "red", "unknown"
+
+# Worst-first, so the overall status is the worst of its parts. "unknown"
+# ranks above green: not knowing is not the same as being fine, and a status
+# page that reports green when it has no data is actively misleading.
+_SEVERITY = [RED, UNKNOWN, YELLOW, GREEN]
+
+
+def _light(value, warn, crit):
+    """Classify a number where higher is worse."""
+    if value is None:
+        return UNKNOWN
+    if value >= crit:
+        return RED
+    if value >= warn:
+        return YELLOW
+    return GREEN
+
+
+def _worst(*lights):
+    for level in _SEVERITY:
+        if level in lights:
+            return level
+    return UNKNOWN
+
+
+def build_status(metrics, sparql):
+    """
+    Reduce the raw numbers to a traffic light per component, plus one overall.
+
+    Computed here rather than in the page so that every consumer agrees on
+    what counts as degraded. A second frontend, an alerting rule or a Slack
+    bot reading this API gets the same verdict without reimplementing it.
+    """
+    components = []
+
+    for svc, label in PUBLIC_SERVICES.items():
+        if metrics is None:
+            status, errors, requests = UNKNOWN, None, None
+        else:
+            errors = metrics["service_error_rate"].get(svc, 0.0)
+            requests = metrics["service_request_rate"].get(svc)
+            if requests is None:
+                # Traefik is reporting nothing for this service at all, which
+                # is different from it reporting zero errors.
+                status = UNKNOWN
+            else:
+                status = _light(errors, SERVICE_ERROR_WARN, SERVICE_ERROR_CRIT)
+
+        # Only the verdict is published. The request and error rates behind it
+        # stay internal -- they are what the light is computed from, not
+        # something the public endpoint reports. Grafana has the raw series
+        # for anyone who needs to look closer.
+        components.append({
+            "id": svc,
+            "name": label,
+            "status": status,
+        })
+
+    # The SPARQL endpoint is probed directly, so it has its own reading
+    # independent of whether Prometheus is reachable.
+    sparql_latency = sparql["latency_ms"] if sparql else None
+    components.append({
+        "id": "sparql",
+        "name": "SPARQL endpoint response",
+        "status": _light(sparql_latency, SPARQL_WARN_MS, SPARQL_CRIT_MS),
+        "latency_ms": sparql_latency,
+    })
+
+    # Portal-wide signals, not tied to one service
+    if metrics is None:
+        error_light = latency_light = UNKNOWN
+    else:
+        error_light = _light(metrics["error_rate_pct"], ERROR_WARN_PCT, ERROR_CRIT_PCT)
+        latency_light = _light(metrics["latency_p95"], LATENCY_WARN_S, LATENCY_CRIT_S)
+
+    overall = _worst(error_light, latency_light, *(c["status"] for c in components))
+
+    # A bare verdict with no stated cause is close to useless: a visitor sees
+    # "DEGRADED" above four green lights and has no way to connect the two.
+    # Name what triggered it, in words rather than metric names.
+    reasons = []
+    if overall == UNKNOWN and metrics is None and sparql is None:
+        # Nothing to attribute it to, so say it directly rather than
+        # wedging it into the "Caused by ..." sentence.
+        return {
+            "overall": UNKNOWN,
+            "detail": "Monitoring data is unavailable, so the portal's "
+                      "status cannot be determined.",
+            "components": components,
+            "signals": {"error_rate": UNKNOWN, "latency": UNKNOWN},
+        }
+    else:
+        if error_light in (YELLOW, RED):
+            reasons.append("an elevated rate of failed requests")
+        if latency_light in (YELLOW, RED):
+            reasons.append("slower than usual response times")
+        for c in components:
+            if c["status"] == RED:
+                reasons.append("errors from %s" % c["name"])
+            elif c["status"] == YELLOW:
+                reasons.append("slow responses from %s" % c["name"])
+            elif c["status"] == UNKNOWN:
+                reasons.append("no data for %s" % c["name"])
+
+    if not reasons:
+        detail = "All monitored services are responding normally."
+    elif len(reasons) == 1:
+        detail = "Caused by %s." % reasons[0]
+    else:
+        detail = "Caused by %s and %s." % (", ".join(reasons[:-1]), reasons[-1])
+
+    return {
+        "overall": overall,
+        "detail": detail,
+        "components": components,
+        "signals": {
+            "error_rate": error_light,
+            "latency": latency_light,
+        },
+    }
 
 
 def sparql_query(query):
@@ -362,7 +527,44 @@ def collect():
         payload["sparql"] = None
         payload["sources"]["sparql"] = "unavailable"
 
+    payload["status"] = build_status(payload["prometheus"], payload["sparql"])
+
     return payload
+
+
+def public_view(payload):
+    """
+    Trim the internal payload down to what the public endpoint reports.
+
+    The raw series -- per-service request and error rates, the CrowdSec block
+    rate, the portal-wide error percentage -- are computed and used to decide
+    the traffic lights, but not published. They describe internal behaviour,
+    and anyone who needs them has Grafana.
+
+    `recent_edits` is withheld for a different reason: the same query over the
+    same window has returned 120, 2,308 and 46,331 on different days, and
+    until that variance is explained the number should not be presented as
+    fact.
+
+    Response-time percentiles are published: they are a WMF user-facing
+    metric, they are aggregates that reveal nothing about the stack, and they
+    give the "degraded" verdict something concrete to stand on.
+    """
+    metrics = payload.get("prometheus")
+
+    view = {
+        "generated_at": payload["generated_at"],
+        "status": payload["status"],
+        "latency": {
+            "p50_seconds": metrics["latency_p50"] if metrics else None,
+            "p95_seconds": metrics["latency_p95"] if metrics else None,
+            "p99_seconds": metrics["latency_p99"] if metrics else None,
+        },
+        "sources": payload["sources"],
+    }
+    if payload.get("stale"):
+        view["stale"] = True
+    return view
 
 
 # ---------------------------------------------------------------- cache
@@ -415,7 +617,7 @@ def status_json():
         payload = cache.get()
     except Exception:
         return jsonify({"error": "status data unavailable"}), 503
-    response = jsonify(payload)
+    response = jsonify(public_view(payload))
     response.headers["Cache-Control"] = "public, max-age=%d" % CACHE_TTL
     return response
 
