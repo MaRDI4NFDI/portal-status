@@ -65,9 +65,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
+          
       - name: Check the image actually starts
         # A successful build only proves the image assembled. This proves
         # the app inside it runs and answers -- the two fail differently
