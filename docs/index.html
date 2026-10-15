@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaRDI Portal Status</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #13161e;
+    --surface2: #1a1e28;
+    --border: #232838;
+    --accent: #4af0a0;
+    --accent2: #3bb8f5;
+    --warn: #f5c842;
+    --error: #f55c5c;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    padding: 48px 0 32px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .logo-area {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-mark {
+    width: 42px;
+    height: 42px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: #0d0f14;
+    flex-shrink: 0;
+  }
+
+  .logo-text h1 {
+    font-family: var(--mono);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+
+  .logo-text p {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+    font-weight: 300;
+  }
+
+  .overall-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 18px;
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 2.5s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  .status-dot.warn { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
+  .status-dot.error { background: var(--error); box-shadow: 0 0 8px var(--error); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .overall-status span {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .last-updated {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+
+  /* Notice banner */
+  .notice {
+    margin: 24px 0 0;
+    background: rgba(74, 240, 160, 0.07);
+    border: 1px solid rgba(74, 240, 160, 0.2);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .notice::before {
+    content: '⚠';
+    color: var(--warn);
+    font-size: 13px;
+  }
+
+  /* Section */
+  section {
+    padding: 36px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  /* Metric cards grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .metric-card:hover {
+    border-color: rgba(74, 240, 160, 0.3);
+  }
+
+  .metric-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .metric-card:hover::after { opacity: 1; }
+
+  .metric-label {
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .metric-label .src {
+    font-family: var(--mono);
+    font-size: 9px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .metric-value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .metric-value.loading {
+    color: var(--border);
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  .metric-sub {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .metric-sub .up { color: var(--accent); }
+  .metric-sub .down { color: var(--error); }
+
+  /* Sparkline */
+  .sparkline {
+    margin-top: 14px;
+    height: 36px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .spark-bar {
+    flex: 1;
+    background: var(--border);
+    border-radius: 2px;
+    transition: background 0.2s;
+  }
+
+  .metric-card:hover .spark-bar {
+    background: rgba(74, 240, 160, 0.2);
+  }
+
+  .spark-bar.accent { background: rgba(74, 240, 160, 0.5); }
+
+  /* Component status table */
+  .component-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .component-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: border-color 0.2s;
+  }
+
+  .component-row:hover { border-color: var(--border); }
+
+  .component-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .component-icon {
+    font-size: 15px;
+    width: 28px;
+    text-align: center;
+  }
+
+  .component-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+
+  .component-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .badge-ok {
+    background: rgba(74, 240, 160, 0.12);
+    color: var(--accent);
+    border: 1px solid rgba(74, 240, 160, 0.25);
+  }
+
+  .badge-warn {
+    background: rgba(245, 200, 66, 0.12);
+    color: var(--warn);
+    border: 1px solid rgba(245, 200, 66, 0.25);
+  }
+
+  .badge-error {
+    background: rgba(245, 92, 92, 0.12);
+    color: var(--error);
+    border: 1px solid rgba(245, 92, 92, 0.25);
+  }
+
+  .badge-pending {
+    background: rgba(107,114,128, 0.12);
+    color: var(--muted);
+    border: 1px solid rgba(107,114,128, 0.25);
+  }
+
+  /* Response time bar */
+  .latency-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    max-width: 180px;
+  }
+
+  .latency-bar-bg {
+    flex: 1;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .latency-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width 1s ease;
+  }
+
+  .latency-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+    min-width: 52px;
+    text-align: right;
+  }
+
+  /* Incident history */
+  .incident-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .incident-day {
+    display: flex;
+    gap: 20px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .incident-day:last-child { border-bottom: none; }
+
+  .incident-date {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    min-width: 80px;
+    padding-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .incident-content {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .incident-item {
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .incident-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-right: 6px;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+  }
+
+  .tag-resolved { background: rgba(74,240,160,0.12); color: var(--accent); }
+  .tag-degraded { background: rgba(245,200,66,0.12); color: var(--warn); }
+  .tag-outage { background: rgba(245,92,92,0.12); color: var(--error); }
+
+  /* Footer */
+  footer {
+    padding: 32px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  footer p {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+
+  footer a {
+    color: var(--accent2);
+    text-decoration: none;
+  }
+
+  .data-sources {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .ds-pill {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 3px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+
+  .ds-pill.live {
+    border-color: rgba(74,240,160,0.25);
+    color: var(--accent);
+  }
+
+  .ds-pill.mock {
+    border-color: rgba(245,200,66,0.25);
+    color: var(--warn);
+  }
+
+  /* Tabs */
+  .tab-row {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+  }
+
+  .tab {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 5px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .tab.active {
+    background: var(--surface2);
+    border-color: rgba(74,240,160,0.3);
+    color: var(--accent);
+  }
+
+  .tab:hover:not(.active) { border-color: var(--muted); color: var(--text); }
+
+  /* ---- traffic light ---- */
+  .light {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex-shrink: 0; background: var(--muted);
+  }
+  .light.green  { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .light.yellow { background: var(--warn);   box-shadow: 0 0 8px var(--warn); }
+  .light.red    { background: var(--error);  box-shadow: 0 0 8px var(--error); }
+  .light.unknown{ background: var(--muted); }
+
+  .light.green, .light.yellow, .light.red {
+    animation: pulse 2.5s ease-in-out infinite;
+  }
+
+  .notice[hidden] { display: none; }
+
+  .status-detail {
+    font-size: 12px;
+    color: var(--text);
+    margin-top: 4px;
+    max-width: 280px;
+    line-height: 1.4;
+  }
+  .status-detail:empty { display: none; }
+
+  .stale-note {
+    font-size: 11px;
+    color: var(--warn);
+    margin-top: 3px;
+  }
+  .stale-note:empty { display: none; }
+
+  /* A saved copy is dimmed, so it never reads as the current state. */
+  .component-list.not-current,
+  .metrics-grid.not-current { opacity: 0.55; }
+  .component-list.not-current .light { animation: none; }
+
+  .status-dot.yellow { background: var(--warn);  box-shadow: 0 0 8px var(--warn); }
+  .status-dot.red    { background: var(--error); box-shadow: 0 0 8px var(--error); }
+  .status-dot.unknown{ background: var(--muted); box-shadow: none; animation: none; }
+
+  .comp-left { display: flex; align-items: center; gap: 12px; }
+
+  .comp-detail {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .legend {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin-top: 18px; padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 11px; color: var(--muted);
+  }
+  .legend-item .light { animation: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <div class="header-inner">
+      <div class="logo-area">
+        <div class="logo-mark">M∂</div>
+        <div class="logo-text">
+          <h1>MaRDI Portal Status</h1>
+          <p>Mathematical Research Data Initiative · portal.mardi4nfdi.de</p>
+        </div>
+      </div>
+      <div>
+        <div class="overall-status">
+          <div class="status-dot unknown" id="status-dot"></div>
+          <div>
+            <span id="status-text" style="color:var(--muted)">CHECKING…</span>
+            <div class="status-detail" id="status-detail"></div>
+            <div class="last-updated" id="last-updated">Loading…</div>
+            <div class="stale-note" id="stale-note"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="notice" id="notice" hidden></div>
+  </header>
+
+  <!-- SERVICE STATUS -->
+  <section>
+    <div class="section-label">/ Services</div>
+    <div class="component-list" id="components">
+      <div class="component-row">
+        <div class="component-name" style="color:var(--muted)">Loading…</div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="light green"></span>Operational</div>
+      <div class="legend-item"><span class="light yellow"></span>Degraded</div>
+      <div class="legend-item"><span class="light red"></span>Problem</div>
+      <div class="legend-item"><span class="light unknown"></span>No data</div>
+    </div>
+  </section>
+
+  <!-- RESPONSE TIME -->
+  <section>
+    <div class="section-label">/ Response Time</div>
+    <div class="metrics-grid" id="latency-grid">
+
+      <div class="metric-card">
+        <div class="metric-label">Median (p50)</div>
+        <div class="metric-value loading" id="lat-p50">—</div>
+        <div class="metric-sub">Typical request</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">95th percentile</div>
+        <div class="metric-value loading" id="lat-p95">—</div>
+        <div class="metric-sub" id="lat-p95-sub">Slowest 5% of requests</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">99th percentile</div>
+        <div class="metric-value loading" id="lat-p99">—</div>
+        <div class="metric-sub">Slowest 1% of requests</div>
+      </div>
+
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      MaRDI Portal Status &mdash; <a href="https://portal.mardi4nfdi.de">portal.mardi4nfdi.de</a>
+    </p>
+    <div class="data-sources">
+      <span class="ds-pill" id="pill-prom">METRICS</span>
+      <span class="ds-pill" id="pill-sparql">SPARQL</span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  // ─────────────────────────────────────────────────────────────────────
+  // The status API this page reads.
+  //
+  // While the service is not yet deployed this points at a sample file in
+  // the repo, so the page is fully working against example data. Swap the
+  // line below for the live endpoint once the hostname is confirmed:
+  //
+  //   const STATUS_URL = 'https://status.portal.mardi4nfdi.de/api/status.json';
+  //
+  // Nothing else needs to change. The API must send an
+  // Access-Control-Allow-Origin header, or the browser will block this page
+  // from reading the response.
+  // ─────────────────────────────────────────────────────────────────────
+  const STATUS_URL = './status.json';
+
+  const REFRESH_MS = 30000;
+  // Data older than this is called out. The service refreshes every 30s, so
+  // several minutes without an update means something has stopped.
+  const STALE_AFTER_MS = 5 * 60 * 1000;
+  const CACHE_KEY = 'mardi-status-last-good';
+
+  const $ = id => document.getElementById(id);
+
+  const OVERALL_TEXT = {
+    green:   ['ALL SYSTEMS OPERATIONAL', 'var(--accent)'],
+    yellow:  ['PARTIALLY DEGRADED',      'var(--warn)'],
+    red:     ['SERVICE PROBLEM',         'var(--error)'],
+    unknown: ['STATUS UNKNOWN',          'var(--muted)'],
+  };
+
+  const STATUS_WORD = {
+    green: 'Operational', yellow: 'Degraded',
+    red: 'Problem', unknown: 'No data',
+  };
+
+  function secs(v) {
+    if (v == null) return '—';
+    return v < 1 ? Math.round(v * 1000) + ' ms' : v.toFixed(2) + ' s';
+  }
+
+  // "4 minutes ago", "2 hours ago" -- an absolute timestamp makes the reader
+  // do the arithmetic, which is the one thing they should not have to do
+  // while working out whether what they are looking at is current.
+  function ago(ms) {
+    const s = Math.round(ms / 1000);
+    if (s < 60) return s + ' seconds ago';
+    const m = Math.round(s / 60);
+    if (m < 60) return m + (m === 1 ? ' minute ago' : ' minutes ago');
+    const h = Math.round(m / 60);
+    if (h < 24) return h + (h === 1 ? ' hour ago' : ' hours ago');
+    const d = Math.round(h / 24);
+    return d + (d === 1 ? ' day ago' : ' days ago');
+  }
+
+  // localStorage is per-browser and can throw (private windows, blocked site
+  // data), so every read and write is guarded and the page works without it.
+  function remember(payload) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+    } catch (e) { /* no cache available; not worth telling the reader */ }
+  }
+
+  function recall() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function setNotice(text, tone) {
+    const el = $('notice');
+    if (!text) { el.hidden = true; return; }
+    el.hidden = false;
+    el.textContent = text;
+    el.style.borderColor = tone === 'red'
+      ? 'rgba(245,92,92,.25)' : 'rgba(245,200,66,.25)';
+  }
+
+  function setPill(id, ok) {
+    const el = $(id);
+    el.className = 'ds-pill ' + (ok ? 'live' : 'mock');
+    el.textContent = el.textContent.split(' ·')[0] + (ok ? ' · LIVE' : ' · DOWN');
+  }
+
+  function renderOverall(level, detail) {
+    const [label, color] = OVERALL_TEXT[level] || OVERALL_TEXT.unknown;
+    $('status-dot').className = 'status-dot ' + level;
+    $('status-text').textContent = label;
+    $('status-text').style.color = color;
+    $('status-detail').textContent = detail || '';
+  }
+
+  function detailFor(c) {
+    if (c.latency_ms != null) return c.latency_ms + ' ms';
+    return STATUS_WORD[c.status] || '';
+  }
+
+  function renderComponents(components) {
+    $('components').innerHTML = components.map(c => `
+      <div class="component-row">
+        <div class="comp-left">
+          <span class="light ${c.status}"></span>
+          <div class="component-name">${c.name}</div>
+        </div>
+        <div class="comp-detail">${detailFor(c)}</div>
+      </div>`).join('');
+  }
+
+  function renderLatency(latency, signals) {
+    const have = latency && latency.p50_seconds != null;
+    [['lat-p50','p50_seconds'], ['lat-p95','p95_seconds'], ['lat-p99','p99_seconds']]
+      .forEach(([id, key]) => {
+        const el = $(id);
+        el.classList.remove('loading');
+        el.textContent = have ? secs(latency[key]) : 'n/a';
+        el.style.color = have ? '' : 'var(--muted)';
+      });
+
+    const sub = $('lat-p95-sub');
+    if (!have) {
+      sub.innerHTML = '<span style="color:var(--error)">Unavailable</span>';
+    } else if (signals.latency === 'green') {
+      sub.textContent = 'Slowest 5% of requests';
+    } else {
+      sub.innerHTML = '<span style="color:var(--warn)">Elevated</span>';
+    }
+  }
+
+  // Draws a payload and says how old it is. `live` false means this came
+  // from the browser's own copy because the fetch failed -- the reader is
+  // told so rather than being shown old numbers as if they were current.
+  function render(payload, live) {
+    const age = Date.now() - new Date(payload.generated_at).getTime();
+
+    if (live) {
+      renderOverall(payload.status.overall, payload.status.detail);
+    } else {
+      // Showing a saved copy as a green verdict would be the worst thing
+      // this page could do: reassuring at exactly the moment it knows
+      // nothing. The headline says unknown; the last known state is
+      // reported underneath as history, which is what it is.
+      renderOverall('unknown',
+        'Last seen ' + ago(age) + ': ' +
+        (payload.status.detail || '').replace(/^All /, 'all '));
+    }
+
+    renderComponents(payload.status.components);
+    $('components').className = 'component-list' + (live ? '' : ' not-current');
+    $('latency-grid').className = 'metrics-grid' + (live ? '' : ' not-current');
+    renderLatency(payload.latency, payload.status.signals);
+
+    setPill('pill-prom', live && payload.sources.prometheus === 'ok');
+    setPill('pill-sparql', live && payload.sources.sparql === 'ok');
+
+    $('last-updated').textContent = 'Measured ' + ago(age);
+
+    if (!live) {
+      $('stale-note').textContent = 'Saved copy — the status service is not responding';
+      setNotice('Cannot reach the status service, so these are the last values '
+              + 'this browser saw. The portal itself may be fine, or may not be.', 'red');
+    } else if (age > STALE_AFTER_MS) {
+      // The page loaded fine and the service answered, but it is serving
+      // old data -- which usually means its own collection has stopped.
+      $('stale-note').textContent = 'This data is not being refreshed';
+      setNotice('The status service is responding but its data has not updated '
+              + 'recently, so this may not reflect the portal right now.', 'yellow');
+    } else {
+      $('stale-note').textContent = '';
+      if (payload.sources.prometheus !== 'ok' || payload.sources.sparql !== 'ok') {
+        setNotice('Some metrics are unavailable, so this page may be incomplete.', 'yellow');
+      } else {
+        setNotice(null);
+      }
+    }
+  }
+
+  function renderNothing() {
+    renderOverall('unknown', 'The status service could not be reached, and this '
+                           + 'browser has no earlier copy to fall back on.');
+    $('components').innerHTML = '';
+    renderLatency(null, {});
+    setPill('pill-prom', false);
+    setPill('pill-sparql', false);
+    $('last-updated').textContent = 'No data';
+    $('stale-note').textContent = '';
+    setNotice('Cannot reach the status service. It may be down along with the '
+            + 'portal it reports on.', 'red');
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch(STATUS_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data.status) throw new Error('unexpected response shape');
+
+      render(data, true);
+      remember(data);
+    } catch (e) {
+      const saved = recall();
+      if (saved) {
+        render(saved, false);
+      } else {
+        renderNothing();
+      }
+    }
+  }
+
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
