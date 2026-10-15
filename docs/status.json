@@ -1,0 +1,43 @@
+{
+  "generated_at": "2026-10-15T13:08:21+00:00",
+  "status": {
+    "overall": "green",
+    "detail": "All monitored services are responding normally.",
+    "components": [
+      {
+        "id": "wikibase",
+        "name": "Portal (wiki pages and editing)",
+        "status": "green"
+      },
+      {
+        "id": "wdqs",
+        "name": "SPARQL query service",
+        "status": "green"
+      },
+      {
+        "id": "ipfs",
+        "name": "IPFS file storage",
+        "status": "green"
+      },
+      {
+        "id": "sparql",
+        "name": "SPARQL endpoint response",
+        "status": "green",
+        "latency_ms": 342
+      }
+    ],
+    "signals": {
+      "error_rate": "green",
+      "latency": "green"
+    }
+  },
+  "latency": {
+    "p50_seconds": 0.0953,
+    "p95_seconds": 1.1534,
+    "p99_seconds": 4.0205
+  },
+  "sources": {
+    "prometheus": "ok",
+    "sparql": "ok"
+  }
+}
