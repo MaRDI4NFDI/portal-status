@@ -36,6 +36,20 @@ PROMETHEUS_URL = os.getenv("PROMETHEUS_URL", "https://prometheus-mardi.zib.de").
 
 SPARQL_URL = os.getenv("SPARQL_URL", "https://query.portal.mardi4nfdi.de/sparql")
 CACHE_TTL = int(os.getenv("CACHE_TTL_SECONDS", "30"))
+
+# Which origins may read /api/status.json from a browser.
+#
+# "*" by default: the endpoint is public, read-only, carries no credentials
+# and exposes nothing that is not already published, so restricting origins
+# would add no protection -- anyone can curl it regardless. Allowing "*" also
+# lets other consumers (a second dashboard, a Slack bot, an alerting rule)
+# use the API without a config change here.
+#
+# If the reverse proxy is ALSO configured to send CORS headers, set this to
+# an empty string. Two Access-Control-Allow-Origin headers on one response
+# make browsers reject it outright -- a duplicated permissive header is
+# treated as no permission at all, and the resulting error does not say so.
+CORS_ORIGIN = os.getenv("CORS_ORIGIN", "*")
 QUERY_TIMEOUT = int(os.getenv("QUERY_TIMEOUT_SECONDS", "10"))
 EDIT_WINDOW_DAYS = int(os.getenv("EDIT_WINDOW_DAYS", "7"))
 
@@ -611,13 +625,35 @@ cache = Cache(CACHE_TTL)
 
 # ---------------------------------------------------------------- routes
 
+def _cors(response):
+    """
+    Permit cross-origin reads of the status data.
+
+    Without this, a page served from anywhere other than this host -- the
+    GitHub Pages site, say -- is blocked by the browser from reading the
+    response, even though the request itself succeeds. The failure appears
+    only in the browser console and does not name CORS as the cause, so it
+    is an easy one to lose hours to.
+
+    The error response is given the same headers deliberately: a page that
+    cannot read a 503 cannot tell "the service is broken" from "the service
+    is unreachable", and those want different messages on screen.
+    """
+    if CORS_ORIGIN:
+        response.headers["Access-Control-Allow-Origin"] = CORS_ORIGIN
+        # Lets a caching proxy keep separate copies per requesting origin.
+        # Harmless with "*", correct if this is ever narrowed to one site.
+        response.headers["Vary"] = "Origin"
+    return response
+
+
 @app.route("/api/status.json")
 def status_json():
     try:
         payload = cache.get()
     except Exception:
-        return jsonify({"error": "status data unavailable"}), 503
-    response = jsonify(public_view(payload))
+        return _cors(jsonify({"error": "status data unavailable"})), 503
+    response = _cors(jsonify(public_view(payload)))
     response.headers["Cache-Control"] = "public, max-age=%d" % CACHE_TTL
     return response
 
