@@ -1,0 +1,91 @@
+# Builds the container image and publishes it to GitHub's registry.
+#
+# Two jobs in one: on a pull request it builds without publishing, which
+# makes the Dockerfile's correctness part of review rather than something
+# discovered at deploy time. On main and on tags it also pushes.
+#
+# Needs no secrets: GITHUB_TOKEN is issued per-run and is enough to write
+# packages for this repository.
+
+name: Build container image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  # Lets you trigger a build by hand from the Actions tab.
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to the registry
+        # Skipped on pull requests: a PR from a fork has a read-only token,
+        # and the build alone is what is being checked there.
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # `main` tracks the branch; `sha-<commit>` pins an exact build for
+          # a deployment that must be reproducible; `v1.2.3` and `latest`
+          # appear on tagged releases.
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Check the image actually starts
+        # A successful build only proves the image assembled. This proves
+        # the app inside it runs and answers -- the two fail differently
+        # and the second is the one that matters at deploy time.
+        if: github.event_name != 'pull_request'
+        run: |
+          docker run -d --name probe -p 8080:8080 \
+            -e METRICS_BACKEND=prometheus \
+            -e PROMETHEUS_URL=http://127.0.0.1:1 \
+            -e QUERY_TIMEOUT_SECONDS=2 \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-$(echo ${{ github.sha }} | cut -c1-7)
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then
+              echo "healthz responded"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "container did not become healthy; logs follow:"
+          docker logs probe
+          exit 1
