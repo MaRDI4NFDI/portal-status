@@ -76,7 +76,7 @@ jobs:
             -e METRICS_BACKEND=prometheus \
             -e PROMETHEUS_URL=http://127.0.0.1:1 \
             -e QUERY_TIMEOUT_SECONDS=2 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-$(echo ${{ github.sha }} | cut -c1-7)
+                        $(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]'):sha-$(echo ${{ github.sha }} | cut -c1-7)
           for i in $(seq 1 20); do
             if curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then
               echo "healthz responded"
